@@ -1,0 +1,13 @@
+= Chip-8 emulator
+
+This is an implementation of a Chip-8 "emulator".
+(It's not really an emulator but rather a processor like interpreter for a limited set of machine code instructions.)
+
+Nothing remarkable but a fun amusement during a weekend.
+
+Although the Chip-8 "machine" or processor is very limited it can produce a lot of fun, 70's like, applications and games.
+
+For more information see:
+
+- https://en.wikipedia.org/wiki/CHIP-8
+- https://tobiasvl.github.io/blog/write-a-chip-8-emulator/
