@@ -42,8 +42,10 @@ func NewChip8(screen Screen) Chip8 {
 	return chip8
 }
 
-func (chip8 Chip8) Run() {
+func (chip8 *Chip8) Run() {
 	var err error
+
+	go timerCounter(chip8)
 
 	lastCycleTimestamp := time.Now()
 
@@ -59,9 +61,7 @@ func (chip8 Chip8) Run() {
 
 		// Chip8 is big endian
 		instructionCode := uint16(chip8.Memory[chip8.PC])<<8 | uint16(chip8.Memory[chip8.PC+1])
-		// if instructionCode != 0x1228 {
-		// 	fmt.Printf("0x%X: 0x%X\n", chip8.PC, instructionCode) // Debug
-		// }
+		printInstructionDebugInfo(chip8.PC, instructionCode)
 		chip8.PC += 2
 
 		x := uint8((instructionCode & 0x0F00) >> 8)
@@ -136,7 +136,7 @@ func (chip8 Chip8) Run() {
 			if z == 0x0 {
 				// 8XY0: Set VX to the value of VY
 				chip8.V[x] = chip8.V[y]
-			} else if z == 1 {
+			} else if z == 0x1 {
 				// 8XY1: VX is set to the bitwise/binary logical disjunction (OR) of VX and VY. VY is not affected.
 				chip8.V[x] |= chip8.V[y]
 			} else if z == 0x2 {
@@ -149,35 +149,45 @@ func (chip8 Chip8) Run() {
 				// 88XY4: VX is set to the value of VX plus the value of VY. VY is not affected. Carry flag in register VF is set if overflow
 				result := uint16(chip8.V[x]) + uint16(chip8.V[y])
 				if result > 0xFF {
-					chip8.V[0xF] = 1
+					chip8.V[flagRegisterIndex] = 1
 				} else {
-					chip8.V[0xF] = 0
+					chip8.V[flagRegisterIndex] = 0
 				}
 				chip8.V[x] = uint8(result % 0x100)
 			} else if z == 0x5 {
 				// 8XY5: subtract VY from VX and put the result in VX. VY is not affected.
 				if chip8.V[x] > chip8.V[y] {
-					chip8.V[0xF] = 1
+					chip8.V[flagRegisterIndex] = 1
 				} else {
-					chip8.V[0xF] = 0
+					chip8.V[flagRegisterIndex] = 0
 				}
 				chip8.V[x] = chip8.V[x] - chip8.V[y]
 			} else if z == 0x6 {
-				// 8XY6: Copy VY to VX and shift VX bits to the right. Put shifted bit VY is not affected.
-				if chip8.V[x] > chip8.V[y] {
-					chip8.V[0xF] = 1
+				// 8XYE: Copy VY to VX and shift VX 1 bit to the right. VF is set to the bit that was shifted out.
+				chip8.V[x] = chip8.V[y]
+				if (chip8.V[x] & 0b000001) > 0 {
+					chip8.V[flagRegisterIndex] = 1
 				} else {
-					chip8.V[0xF] = 0
+					chip8.V[flagRegisterIndex] = 0
 				}
-				chip8.V[x] = chip8.V[x] - chip8.V[y]
+				chip8.V[x] = chip8.V[x] >> 1
 			} else if z == 0x7 {
 				// 8XY7: subtract VX from VY and put the result in VX. VY is not affected.
 				if chip8.V[y] > chip8.V[x] {
-					chip8.V[0xF] = 1
+					chip8.V[flagRegisterIndex] = 1
 				} else {
-					chip8.V[0xF] = 0
+					chip8.V[flagRegisterIndex] = 0
 				}
 				chip8.V[x] = chip8.V[y] - chip8.V[x]
+			} else if z == 0xE {
+				// 8XYE: Copy VY to VX and shift VX 1 bit to the left. VF is set to the bit that was shifted out.
+				chip8.V[x] = chip8.V[y]
+				if ((chip8.V[x] & 0b100000) >> 7) > 0 {
+					chip8.V[flagRegisterIndex] = 1
+				} else {
+					chip8.V[flagRegisterIndex] = 0
+				}
+				chip8.V[x] = chip8.V[x] << 1
 			}
 
 		case 0x9:
@@ -201,7 +211,7 @@ func (chip8 Chip8) Run() {
 			// DXYN: Display
 			pixelX := chip8.V[x] % chip8.Screen.Width
 			pixelY := chip8.V[y] % chip8.Screen.Height
-			chip8.V[0xF] = 0
+			chip8.V[flagRegisterIndex] = 0
 
 			for spriteY := uint8(0); spriteY < n; spriteY++ {
 				pixelBitValues := chip8.Memory[chip8.I+uint16(spriteY)]
@@ -211,7 +221,7 @@ func (chip8 Chip8) Run() {
 
 						resultPixelValue := chip8.Screen.XorPixel(pixelX+(7-spriteX), pixelY+spriteY, pixelValue)
 						if (pixelValue == 1) && (resultPixelValue == 0) {
-							chip8.V[0xF] = 1
+							chip8.V[flagRegisterIndex] = 1
 						}
 					}
 				}
@@ -248,9 +258,9 @@ func (chip8 Chip8) Run() {
 
 				result := chip8.I + uint16(chip8.V[x])
 				if (chip8.I == 0xFFF) && (result > 0xFFF) { // "Above 0x1000" or is it "above 0x0FFF"?
-					chip8.V[0xF] = 0x1
+					chip8.V[flagRegisterIndex] = 1
 				} else {
-					chip8.V[0xF] = 0x0 // Should flag be set to 0 if result was 0x0FFF or below?
+					chip8.V[flagRegisterIndex] = 0 // Should flag be set to 0 if result was 0x0FFF or below?
 				}
 				chip8.I = result & 0x0FFF
 			} else if nn == 0x0A {
@@ -284,12 +294,15 @@ func (chip8 Chip8) Run() {
 					chip8.V[i] = chip8.Memory[chip8.I+uint16(i)]
 				}
 			}
+
+		default:
+			panic(fmt.Sprintf("unknown instruction \"0x%X\" at address 0x%X", instructionCode, chip8.PC-2))
 		}
 
 	}
 }
 
-func (chip8 Chip8) LoadROM(filepath string) {
+func (chip8 *Chip8) LoadROM(filepath string) {
 	romBytes, err := os.ReadFile(filepath)
 	if err != nil {
 		fmt.Printf("could not load ROM file \"%s\": %s\n", filepath, err.Error())
@@ -331,5 +344,18 @@ func addFont(chip Chip8) {
 
 	for i, b := range font {
 		chip.Memory[chip.fontStartAddress+uint16(i)] = b
+	}
+}
+
+func timerCounter(chip8 *Chip8) {
+	var countDownFrequency = 1000 / 60 // 60 Hz
+	for {
+		time.Sleep(time.Duration(countDownFrequency) * time.Millisecond)
+		if chip8.Timer > 0 {
+			chip8.Timer--
+		}
+		if chip8.SoundTimer > 0 {
+			chip8.SoundTimer--
+		}
 	}
 }
