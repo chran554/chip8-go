@@ -64,6 +64,7 @@ func (chip8 *Chip8) Run() {
 		printInstructionDebugInfo(chip8.PC, instructionCode)
 		chip8.PC += 2
 
+		instructionType := uint8((instructionCode & 0xF000) >> 12)
 		x := uint8((instructionCode & 0x0F00) >> 8)
 		y := uint8((instructionCode & 0x00F0) >> 4)
 		z := uint8((instructionCode & 0x000F) >> 0)
@@ -72,8 +73,6 @@ func (chip8 *Chip8) Run() {
 		nnn := instructionCode & 0x0FFF
 
 		// Processor stage: Decode (and Execute)
-
-		instructionType := (instructionCode & 0xF000) >> 12
 
 		switch instructionType {
 		case 0x0:
@@ -277,20 +276,23 @@ func (chip8 *Chip8) Run() {
 				chip8.I = chip8.fontStartAddress + (uint16(chip8.V[x]) * 5)
 			} else if nn == 0x33 {
 				// FX33: Binary-coded decimal conversion
-				// It takes the number in VX and converts it to three decimal digits, storing these digits in memory at the start address in the index register I.
+				// It takes the number in VX and converts it to three decimal digits,
+				// storing these digits in memory at the start address in the index register I.
 				chip8.Memory[chip8.I+0] = (chip8.V[x] / 100) % 10
 				chip8.Memory[chip8.I+1] = (chip8.V[x] / 10) % 10
 				chip8.Memory[chip8.I+2] = (chip8.V[x] / 1) % 10
 			} else if nn == 0x55 {
 				// FX55: Store V registers in memory
-				// The value of each variable register from V0 to VX inclusive (if X is 0, then only V0) will be stored in successive memory addresses, starting with the one that’s stored in I.
-				for i := uint8(0); (i < x) && (i <= 0xF); i++ {
+				// The value of each variable register from V0 to VX inclusive
+				// (if X is 0, then only V0) will be stored in successive memory addresses,
+				// starting with the one that’s pointed to by register I.
+				for i := uint8(0); (i <= x) && (i <= 0xF); i++ {
 					chip8.Memory[chip8.I+uint16(i)] = chip8.V[i]
 				}
 			} else if nn == 0x65 {
 				// FX65: Load registers from memory
 				// Takes the value stored at the memory addresses and loads them into the variable registers.
-				for i := uint8(0); (i < x) && (i <= 0xF); i++ {
+				for i := uint8(0); (i <= x) && (i <= 0xF); i++ {
 					chip8.V[i] = chip8.Memory[chip8.I+uint16(i)]
 				}
 			}
