@@ -8,7 +8,7 @@ import (
 )
 
 const romAddressDefault = 0x200
-const romAddressEti = 0x600
+const romAddressEti660 = 0x600
 const fontAddressDefault = 0x050
 const flagRegisterIndex = 0xF
 
@@ -142,10 +142,10 @@ func (chip8 *Chip8) Run() {
 				// 8XY2: VX is set to the bitwise/binary logical conjunction (AND) of VX and VY. VY is not affected.
 				chip8.V[x] &= chip8.V[y]
 			} else if z == 0x3 {
-				// 88XY3: VX is set to the bitwise/binary exclusive OR (XOR) of VX and VY. VY is not affected.
+				// 8XY3: VX is set to the bitwise/binary exclusive OR (XOR) of VX and VY. VY is not affected.
 				chip8.V[x] ^= chip8.V[y]
 			} else if z == 0x4 {
-				// 88XY4: VX is set to the value of VX plus the value of VY. VY is not affected. Carry flag in register VF is set if overflow
+				// 8XY4: VX is set to the value of VX plus the value of VY. VY is not affected. Carry flag in register VF is set if overflow
 				result := uint16(chip8.V[x]) + uint16(chip8.V[y])
 				if result > 0xFF {
 					chip8.V[flagRegisterIndex] = 1
@@ -162,7 +162,7 @@ func (chip8 *Chip8) Run() {
 				}
 				chip8.V[x] = chip8.V[x] - chip8.V[y]
 			} else if z == 0x6 {
-				// 8XYE: Copy VY to VX and shift VX 1 bit to the right. VF is set to the bit that was shifted out.
+				// 8XY6: Copy VY to VX and shift VX 1 bit to the right. VF is set to the bit that was shifted out.
 				chip8.V[x] = chip8.V[y]
 				if (chip8.V[x] & 0b000001) > 0 {
 					chip8.V[flagRegisterIndex] = 1
@@ -304,15 +304,23 @@ func (chip8 *Chip8) Run() {
 	}
 }
 
-func (chip8 *Chip8) LoadROM(filepath string) {
+func (chip8 *Chip8) _loadROM(filepath string, startAddress int) {
 	romBytes, err := os.ReadFile(filepath)
 	if err != nil {
 		fmt.Printf("could not load ROM file \"%s\": %s\n", filepath, err.Error())
 	}
 
 	for i, romByte := range romBytes {
-		chip8.Memory[romAddressDefault+i] = romByte
+		chip8.Memory[startAddress+i] = romByte
 	}
+}
+
+func (chip8 *Chip8) LoadROM(filepath string) {
+	chip8._loadROM(filepath, romAddressDefault)
+}
+
+func (chip8 *Chip8) LoadETI660ROM(filepath string) {
+	chip8._loadROM(filepath, romAddressEti660)
 }
 
 func getPressedKey() uint8 {
