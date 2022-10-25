@@ -42,26 +42,21 @@ func NewChip8(screen Screen) Chip8 {
 	return chip8
 }
 
-func (chip8 *Chip8) Run() {
+func (chip8 *Chip8) Run(debug bool) {
 	var err error
 
 	go timerCounter(chip8)
 
-	lastCycleTimestamp := time.Now()
-
 	for true {
 		// Processor stage: Fetch
 
-		now := time.Now()
-		nextCycleTimestamp := lastCycleTimestamp.Add(2 * time.Millisecond) // 500Hz, i.e. 500 cycles per second, taking 2 msec each cycle
-		if now.Before(nextCycleTimestamp) {
-			time.Sleep(nextCycleTimestamp.Sub(now))
-			lastCycleTimestamp = nextCycleTimestamp
-		}
+		time.Sleep(time.Duration(2) * time.Millisecond)
 
 		// Chip8 is big endian
 		instructionCode := uint16(chip8.Memory[chip8.PC])<<8 | uint16(chip8.Memory[chip8.PC+1])
-		printInstructionDebugInfo(chip8.PC, instructionCode)
+		if debug {
+			printInstructionDebugInfo(chip8.PC, instructionCode)
+		}
 		chip8.PC += 2
 
 		instructionType := uint8((instructionCode & 0xF000) >> 12)
@@ -85,7 +80,7 @@ func (chip8 *Chip8) Run() {
 			} else if nnn == 0x0E0 {
 				// 00E0: Clear screen
 				chip8.Screen.Clear()
-				chip8.Screen.Print()
+				go chip8.Screen.Print()
 			} else {
 				fmt.Println("Machine code execution not available/not implemented")
 			}
@@ -198,16 +193,20 @@ func (chip8 *Chip8) Run() {
 			}
 
 		case 0xA:
+			// ANNN: Sets the index register I to the value NNN.
 			chip8.I = nnn
 
 		case 0xB:
+			// BNNN: Jump to the address NNN plus the value in the register V0.
 			chip8.PC = nnn + uint16(chip8.V[0x0])
 
 		case 0xC:
+			// CXNN: Generates a random number, binary ANDs it with the value NN, and puts the result in VX.
 			chip8.V[x] = uint8(rand.Uint32()&0x000000FF) & nn
 
 		case 0xD:
-			// DXYN: Display
+			// DXYN: Draw an N pixels tall sprite from the memory location that the I index register is holding to the screen,
+			// at the horizontal X coordinate in VX and the Y coordinate in VY.
 			pixelX := chip8.V[x] % chip8.Screen.Width
 			pixelY := chip8.V[y] % chip8.Screen.Height
 			chip8.V[flagRegisterIndex] = 0
@@ -226,7 +225,7 @@ func (chip8 *Chip8) Run() {
 				}
 			}
 
-			chip8.Screen.Print()
+			go chip8.Screen.Print()
 
 		case 0xE:
 			if nn == 0x9E {
@@ -263,7 +262,7 @@ func (chip8 *Chip8) Run() {
 				}
 				chip8.I = result & 0x0FFF
 			} else if nn == 0x0A {
-				// FX0A: Get key. This instruction “blocks”; it stops executing instructions and waits for key input (or loops forever, unless a key is pressed).
+				// FX0A: This instruction "blocks", it stops executing instructions and wait for key input. Value of key is stored in VX.
 				pressedKeyCode := getPressedKey()
 				if pressedKeyCode != 0xFF {
 					chip8.V[x] = pressedKeyCode

@@ -1,6 +1,9 @@
 package chip8
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
 type Screen struct {
 	Width  uint8
@@ -17,34 +20,44 @@ func NewScreen() Screen {
 }
 
 func (s *Screen) XorPixel(x, y uint8, v uint8) byte {
-	s.gfxMem[x][y] ^= v
-	return s.gfxMem[x][y]
+	if (x >= s.Width) || (y >= s.Height) {
+		return 0x00
+	} else {
+		s.gfxMem[x][y] ^= v
+		return s.gfxMem[x][y]
+	}
 }
 
 func (s *Screen) Value(x, y uint8) uint8 {
-	return s.gfxMem[x][y]
+	if (x >= s.Width) || (y >= s.Height) {
+		return 0x00
+	} else {
+		return s.gfxMem[x][y]
+	}
 }
 
 func (s *Screen) Clear() {
 	for _, uint8s := range s.gfxMem {
 		for i := range uint8s {
-			uint8s[i] = 0
+			uint8s[i] = 0x00
 		}
 	}
 }
 
 func (s *Screen) Print() {
-	fmt.Println("================================")
+	var buffer bytes.Buffer
+	buffer.WriteString("\n")
 	for y := uint8(0); y < s.Height; y++ {
 		for x := uint8(0); x < s.Width; x++ {
 			pixelValue := s.Value(x, y)
 			if pixelValue == 0 {
-				fmt.Print("░")
+				buffer.WriteString("░░")
 			} else {
-				fmt.Print("█")
+				buffer.WriteString("██")
 			}
 		}
-		fmt.Println()
+		buffer.WriteString("\n")
 	}
-	fmt.Println("================================")
+
+	fmt.Println(buffer.String())
 }
