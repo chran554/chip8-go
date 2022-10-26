@@ -13,12 +13,14 @@ const fontAddressDefault = 0x050
 const flagRegisterIndex = 0xF
 
 type Configuration struct {
-	Disassemble           bool // Disassemble do execute the ROM program but rather prints it to stdout with, more or less, natural language explanation to each instruction
 	Debug                 bool // Debug mode prints, in more or less natural language, the instructions performed during the program execution
 	ModeRomCompatibility  bool // ModeRomCompatibility The preferred mode setting for most ROM compatibility
 	ModeStrictCosmac      bool // ModeStrictCosmac infers strict original instruction execution as COSMAC was designed (far from all ROM adhere to this)
 	EndOnInfiniteLoop     bool // EndOnInfiniteLoop ends the program if an infinite loop is detected (some program ends with infinite loop and require restart to run again)
 	RestartOnInfiniteLoop bool // RestartOnInfiniteLoop restarts the program if an infinite loop is detected (some program ends with infinite loop and require restart to run again)
+
+	Disassemble          bool // Disassemble do execute the ROM program but rather prints it to stdout with, more or less, natural language explanation to each instruction
+	DisassembleEveryByte bool // DisassembleEveryByte try to disassemble instructions at all bytes not just at even addresses. Some programs have parts of the code based at uneven addresses.
 }
 
 type Chip8 struct {

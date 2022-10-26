@@ -48,10 +48,10 @@ var instructionRegExp = map[string]*regexp.Regexp{
 func DisassembleProgram(romFilepath string, startAddress uint16, configuration Configuration) {
 	bytes := loadByteFile(romFilepath)
 
-	for address := uint16(0); address < uint16(len(bytes)); address++ {
+	for address := uint16(0); address < (uint16(len(bytes)) - 1); address++ {
 
 		binaryBitsText := strings.ReplaceAll(strings.ReplaceAll(fmt.Sprintf("%08b", bytes[address]), "0", "░"), "1", "█")
-		if (address % 2) == 0 {
+		if (address%2) == 0 || configuration.DisassembleEveryByte {
 			instructionCode := uint16(bytes[address+0])<<8 | uint16(bytes[address+1])
 
 			if matchesAnyInstructionSyntax(instructionCode) {
@@ -191,7 +191,7 @@ func explanation(instruction uint16, configuration Configuration) string {
 	if configuration.ModeStrictCosmac || configuration.ModeRomCompatibility {
 		if instructionRegExp["BNNN"].MatchString(instructionText) {
 			matches := instructionRegExp["BNNN"].FindStringSubmatch(instructionText)
-			return fmt.Sprintf("BNNN: Jump to address 0x%s%s plus offset found in register V0", matches[1], matches[2])
+			return fmt.Sprintf("BNNN: Jump to address 0x%s%s plus offset found in register V0", matches[1])
 		}
 	} else {
 		if instructionRegExp["BXNN"].MatchString(instructionText) {
