@@ -28,7 +28,8 @@ var instructionRegExp = map[string]*regexp.Regexp{
 	"8XYE": regexp.MustCompile("8(\\w)(\\w)E"),
 	"9XY0": regexp.MustCompile("9(\\w)(\\w)0"),
 	"ANNN": regexp.MustCompile("A(\\w\\w\\w)"),
-	"BNNN": regexp.MustCompile("B(\\w\\w\\w)"),
+	"BNNN": regexp.MustCompile("B(\\w\\w\\w)"),   // Original COSMAC behaviour
+	"BXNN": regexp.MustCompile("B(\\w)(\\w\\w)"), // Later, popular but faulty(?), implementations
 	"CXNN": regexp.MustCompile("C(\\w)(\\w\\w)"),
 	"DXYN": regexp.MustCompile("D(\\w)(\\w)(\\w)"),
 	"EX9E": regexp.MustCompile("E(\\w)9E"),
@@ -44,7 +45,7 @@ var instructionRegExp = map[string]*regexp.Regexp{
 	"FX65": regexp.MustCompile("F(\\w)65"),
 }
 
-func DisassembleProgram(romFilepath string, startAddress uint16) {
+func DisassembleProgram(romFilepath string, startAddress uint16, configuration Configuration) {
 	bytes := loadByteFile(romFilepath)
 
 	for address := uint16(0); address < uint16(len(bytes)); address++ {
@@ -54,7 +55,7 @@ func DisassembleProgram(romFilepath string, startAddress uint16) {
 			instructionCode := uint16(bytes[address+0])<<8 | uint16(bytes[address+1])
 
 			if matchesAnyInstructionSyntax(instructionCode) {
-				fmt.Printf("0x%03X:  0x%02X  %s    %04X    %s\n", startAddress+address, bytes[address], binaryBitsText, instructionCode, explanation(instructionCode))
+				fmt.Printf("0x%03X:  0x%02X  %s    %04X    %s\n", startAddress+address, bytes[address], binaryBitsText, instructionCode, explanation(instructionCode, configuration))
 			} else {
 				fmt.Printf("0x%03X:  0x%02X  %s\n", startAddress+address, bytes[address], binaryBitsText)
 			}
@@ -65,20 +66,20 @@ func DisassembleProgram(romFilepath string, startAddress uint16) {
 	}
 }
 
-func printInstructionDebugInfo(address uint16, instruction uint16) {
+func printInstructionDebugInfo(address uint16, instruction uint16, configuration Configuration) {
 	// "eternal loop" == "jump to the same address"
 	eternalLoop := (((instruction & 0xF000) >> 12) == 1) && (address == (instruction & 0x0FFF))
 
 	if !eternalLoop {
-		fmt.Printf("0x%03X: %04X   # %s\n", address, instruction, explanation(instruction))
+		fmt.Printf("0x%03X: %04X   # %s\n", address, instruction, explanation(instruction, configuration))
 	}
 }
 
 func matchesAnyInstructionSyntax(instruction uint16) bool {
 	instructionText := fmt.Sprintf("%04X", instruction)
 
-	for _, regexp := range instructionRegExp {
-		if regexp.MatchString(instructionText) {
+	for _, ire := range instructionRegExp {
+		if ire.MatchString(instructionText) {
 			return true
 		}
 	}
@@ -86,7 +87,7 @@ func matchesAnyInstructionSyntax(instruction uint16) bool {
 	return false
 }
 
-func explanation(instruction uint16) string {
+func explanation(instruction uint16, configuration Configuration) string {
 	instructionText := fmt.Sprintf("%04X", instruction)
 
 	if instructionRegExp["00E0"].MatchString(instructionText) {
@@ -164,7 +165,7 @@ func explanation(instruction uint16) string {
 
 	if instructionRegExp["8XY6"].MatchString(instructionText) {
 		matches := instructionRegExp["8XY6"].FindStringSubmatch(instructionText)
-		return fmt.Sprintf("8XY6: Copy V%s to V%s and shift V%s 1 bit to the RIGHT. VF is set to the bit that was shifted out.", matches[2], matches[1], matches[1])
+		return fmt.Sprintf("8XY6: (Strict COSMAC: Copy V%s to V%s and) shift V%s 1 bit to the RIGHT. VF is set to the bit that was shifted out.", matches[2], matches[1], matches[1])
 	}
 
 	if instructionRegExp["8XY7"].MatchString(instructionText) {
@@ -174,7 +175,7 @@ func explanation(instruction uint16) string {
 
 	if instructionRegExp["8XYE"].MatchString(instructionText) {
 		matches := instructionRegExp["8XYE"].FindStringSubmatch(instructionText)
-		return fmt.Sprintf("8XYE: Copy V%s to V%s and shift V%s 1 bit to the LEFT. VF is set to the bit that was shifted out.", matches[2], matches[1], matches[1])
+		return fmt.Sprintf("8XYE: (Strict COSMAC: Copy V%s to V%s and) shift V%s 1 bit to the LEFT. VF is set to the bit that was shifted out.", matches[2], matches[1], matches[1])
 	}
 
 	if instructionRegExp["9XY0"].MatchString(instructionText) {
@@ -187,9 +188,16 @@ func explanation(instruction uint16) string {
 		return fmt.Sprintf("ANNN: Set register I to point at address 0x%s", matches[1])
 	}
 
-	if instructionRegExp["BNNN"].MatchString(instructionText) {
-		matches := instructionRegExp["BNNN"].FindStringSubmatch(instructionText)
-		return fmt.Sprintf("BNNN: Jump to address 0x%s plus offset found in register V0", matches[1])
+	if configuration.ModeStrictCosmac || configuration.ModeRomCompatibility {
+		if instructionRegExp["BNNN"].MatchString(instructionText) {
+			matches := instructionRegExp["BNNN"].FindStringSubmatch(instructionText)
+			return fmt.Sprintf("BNNN: Jump to address 0x%s%s plus offset found in register V0", matches[1], matches[2])
+		}
+	} else {
+		if instructionRegExp["BXNN"].MatchString(instructionText) {
+			matches := instructionRegExp["BXNN"].FindStringSubmatch(instructionText)
+			return fmt.Sprintf("BXNN: Jump to address 0x%s%s plus offset found in register V%s", matches[1], matches[2], matches[1])
+		}
 	}
 
 	if instructionRegExp["CXNN"].MatchString(instructionText) {

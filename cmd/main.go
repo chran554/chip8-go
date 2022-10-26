@@ -3,23 +3,33 @@ package main
 import (
 	"chip8/pkg/chip8"
 	"fmt"
+	"os"
 )
 
 func main() {
-	fmt.Println("Up 'n' running...")
+	if len(os.Args) != 2 {
+		fmt.Println("You need to supply at least 1 argument to the program. The file path to a ROM file.")
+		os.Exit(1)
+	}
+	romFilepath := os.Args[1]
 
-	//romFilepath := "roms/test_opcode.ch8"
-	//romFilepath := "roms/IBM Logo.ch8"
-	//romFilepath := "roms/PONG.ch8"
-	romFilepath := "roms/BRIX.ch8"
+	configuration := chip8.Configuration{
+		Disassemble:          false,
+		Debug:                false,
+		EndOnInfiniteLoop:    true,
+		ModeRomCompatibility: true,
+		ModeStrictCosmac:     false,
+	}
 
-	screen := chip8.NewScreen()
-	chip8 := chip8.NewChip8(screen)
-	chip8.LoadROM(romFilepath)
-	chip8.Run(false)
-
-	//fmt.Printf("Disassembly of \"%s\":\n", romFilepath)
-	//chip8.DisassembleProgram(romFilepath, 0x200)
-
-	fmt.Println("Done.")
+	if !configuration.Disassemble {
+		fmt.Printf("CHIP-8 execution of \"%s\":\n", romFilepath)
+		fmt.Printf("%+v\n", configuration)
+		screen := chip8.NewScreen()
+		machine := chip8.NewChip8(screen)
+		machine.LoadROM(romFilepath)
+		machine.Run(configuration)
+	} else {
+		fmt.Printf("CHIP-8 disassembly of \"%s\":\n", romFilepath)
+		chip8.DisassembleProgram(romFilepath, 0x200, configuration)
+	}
 }

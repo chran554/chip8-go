@@ -12,6 +12,15 @@ const romAddressEti660 = 0x600
 const fontAddressDefault = 0x050
 const flagRegisterIndex = 0xF
 
+type Configuration struct {
+	Disassemble           bool // Disassemble do execute the ROM program but rather prints it to stdout with, more or less, natural language explanation to each instruction
+	Debug                 bool // Debug mode prints, in more or less natural language, the instructions performed during the program execution
+	ModeRomCompatibility  bool // ModeRomCompatibility The preferred mode setting for most ROM compatibility
+	ModeStrictCosmac      bool // ModeStrictCosmac infers strict original instruction execution as COSMAC was designed (far from all ROM adhere to this)
+	EndOnInfiniteLoop     bool // EndOnInfiniteLoop ends the program if an infinite loop is detected (some program ends with infinite loop and require restart to run again)
+	RestartOnInfiniteLoop bool // RestartOnInfiniteLoop restarts the program if an infinite loop is detected (some program ends with infinite loop and require restart to run again)
+}
+
 type Chip8 struct {
 	Memory           []byte
 	PC               uint16
@@ -42,7 +51,7 @@ func NewChip8(screen Screen) Chip8 {
 	return chip8
 }
 
-func (chip8 *Chip8) Run(debug bool) {
+func (chip8 *Chip8) Run(configuration Configuration) {
 	var err error
 
 	go timerCounter(chip8)
@@ -54,8 +63,8 @@ func (chip8 *Chip8) Run(debug bool) {
 
 		// Chip8 is big endian
 		instructionCode := uint16(chip8.Memory[chip8.PC])<<8 | uint16(chip8.Memory[chip8.PC+1])
-		if debug {
-			printInstructionDebugInfo(chip8.PC, instructionCode)
+		if configuration.Debug {
+			printInstructionDebugInfo(chip8.PC, instructionCode, configuration)
 		}
 		chip8.PC += 2
 
@@ -83,10 +92,16 @@ func (chip8 *Chip8) Run(debug bool) {
 				go chip8.Screen.Print()
 			} else {
 				fmt.Println("Machine code execution not available/not implemented")
+				os.Exit(1)
 			}
 
 		case 0x1:
 			// 1NNN: Jump to address NNN
+			if configuration.EndOnInfiniteLoop && ((chip8.PC - 2) == nnn) {
+				fmt.Println("Terminated emulator and program on detected infinite loop")
+				os.Exit(0)
+			}
+
 			chip8.PC = nnn
 
 		case 0x2:
@@ -157,13 +172,11 @@ func (chip8 *Chip8) Run(debug bool) {
 				}
 				chip8.V[x] = chip8.V[x] - chip8.V[y]
 			} else if z == 0x6 {
-				// 8XY6: Copy VY to VX and shift VX 1 bit to the right. VF is set to the bit that was shifted out.
-				chip8.V[x] = chip8.V[y]
-				if (chip8.V[x] & 0b000001) > 0 {
-					chip8.V[flagRegisterIndex] = 1
-				} else {
-					chip8.V[flagRegisterIndex] = 0
+				// 8XY6: (Strict COSMAC: Copy VY to VX and) shift VX 1 bit to the right. VF is set to the bit that was shifted out.
+				if configuration.ModeStrictCosmac {
+					chip8.V[x] = chip8.V[y]
 				}
+				chip8.V[flagRegisterIndex] = (chip8.V[x] & 0b00000001) >> 0
 				chip8.V[x] = chip8.V[x] >> 1
 			} else if z == 0x7 {
 				// 8XY7: subtract VX from VY and put the result in VX. VY is not affected.
@@ -174,13 +187,11 @@ func (chip8 *Chip8) Run(debug bool) {
 				}
 				chip8.V[x] = chip8.V[y] - chip8.V[x]
 			} else if z == 0xE {
-				// 8XYE: Copy VY to VX and shift VX 1 bit to the left. VF is set to the bit that was shifted out.
-				chip8.V[x] = chip8.V[y]
-				if ((chip8.V[x] & 0b100000) >> 7) > 0 {
-					chip8.V[flagRegisterIndex] = 1
-				} else {
-					chip8.V[flagRegisterIndex] = 0
+				// 8XYE: (Strict COSMAC: Copy VY to VX and) shift VX 1 bit to the left. VF is set to the bit that was shifted out.
+				if configuration.ModeStrictCosmac {
+					chip8.V[x] = chip8.V[y]
 				}
+				chip8.V[flagRegisterIndex] = (chip8.V[x] & 0b10000000) >> 7
 				chip8.V[x] = chip8.V[x] << 1
 			}
 
@@ -197,8 +208,13 @@ func (chip8 *Chip8) Run(debug bool) {
 			chip8.I = nnn
 
 		case 0xB:
-			// BNNN: Jump to the address NNN plus the value in the register V0.
-			chip8.PC = nnn + uint16(chip8.V[0x0])
+			if configuration.ModeStrictCosmac || configuration.ModeRomCompatibility {
+				// BNNN: Jump to the address NNN plus the value in the register V0.
+				chip8.PC = nnn + uint16(chip8.V[0x0])
+			} else {
+				// B(X)NNN: Jump to the address NNN plus the value in the register VX.
+				chip8.PC = nnn + uint16(chip8.V[x])
+			}
 
 		case 0xC:
 			// CXNN: Generates a random number, binary ANDs it with the value NN, and puts the result in VX.
@@ -263,12 +279,17 @@ func (chip8 *Chip8) Run(debug bool) {
 				chip8.I = result & 0x0FFF
 			} else if nn == 0x0A {
 				// FX0A: This instruction "blocks", it stops executing instructions and wait for key input. Value of key is stored in VX.
-				pressedKeyCode := getPressedKey()
-				if pressedKeyCode != 0xFF {
-					chip8.V[x] = pressedKeyCode
-				} else {
-					chip8.PC -= 2 // Do not advance in program, do this instruction over again (loop)
+				for {
+					time.Sleep(time.Duration(10) * time.Second)
 				}
+				/*
+					pressedKeyCode := getPressedKey()
+					if pressedKeyCode != 0xFF {
+						chip8.V[x] = pressedKeyCode
+					} else {
+						chip8.PC -= 2 // Do not advance in program, do this instruction over again (loop)
+					}
+				*/
 			} else if nn == 0x29 {
 				// FX29: Set index register to point at font character address. The character code is stored in VX
 				// Each character is 5 bytes in height
@@ -285,14 +306,28 @@ func (chip8 *Chip8) Run(debug bool) {
 				// The value of each variable register from V0 to VX inclusive
 				// (if X is 0, then only V0) will be stored in successive memory addresses,
 				// starting with the one that’s pointed to by register I.
-				for i := uint8(0); (i <= x) && (i <= 0xF); i++ {
-					chip8.Memory[chip8.I+uint16(i)] = chip8.V[i]
+				if configuration.ModeStrictCosmac && !configuration.ModeRomCompatibility {
+					for i := uint8(0); (i <= x) && (i <= 0xF); i++ {
+						chip8.Memory[chip8.I] = chip8.V[i]
+						chip8.I++
+					}
+				} else {
+					for i := uint8(0); (i <= x) && (i <= 0xF); i++ {
+						chip8.Memory[chip8.I+uint16(i)] = chip8.V[i]
+					}
 				}
 			} else if nn == 0x65 {
 				// FX65: Load registers from memory
 				// Takes the value stored at the memory addresses and loads them into the variable registers.
-				for i := uint8(0); (i <= x) && (i <= 0xF); i++ {
-					chip8.V[i] = chip8.Memory[chip8.I+uint16(i)]
+				if configuration.ModeStrictCosmac && !configuration.ModeRomCompatibility {
+					for i := uint8(0); (i <= x) && (i <= 0xF); i++ {
+						chip8.V[i] = chip8.Memory[chip8.I]
+						chip8.I++
+					}
+				} else {
+					for i := uint8(0); (i <= x) && (i <= 0xF); i++ {
+						chip8.V[i] = chip8.Memory[chip8.I+uint16(i)]
+					}
 				}
 			}
 
@@ -307,6 +342,7 @@ func (chip8 *Chip8) _loadROM(filepath string, startAddress int) {
 	romBytes, err := os.ReadFile(filepath)
 	if err != nil {
 		fmt.Printf("could not load ROM file \"%s\": %s\n", filepath, err.Error())
+		os.Exit(1)
 	}
 
 	for i, romByte := range romBytes {
