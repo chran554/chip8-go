@@ -66,7 +66,8 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 		if configuration.Debug {
 			printInstructionDebugInfo(chip8.PC, instructionCode, configuration)
 		}
-		chip8.PC += 2
+
+		// Processor stage: Decode(-ish)
 
 		instructionType := uint8((instructionCode & 0xF000) >> 12)
 		x := uint8((instructionCode & 0x0F00) >> 8)
@@ -76,7 +77,9 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 		nn := uint8(instructionCode & 0x00FF)
 		nnn := instructionCode & 0x0FFF
 
-		// Processor stage: Decode (and Execute)
+		// Processor stage: Execute
+
+		chip8.PC += 2
 
 		switch instructionType {
 		case 0x0:
@@ -268,13 +271,15 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 				chip8.SoundTimer = chip8.V[x]
 			} else if nn == 0x1E {
 				// FX1E: Add to index. The index register I will get the value in VX added to it.
-				// TODO Check ambiguous information on "correct" behaviour
-
 				result := chip8.I + uint16(chip8.V[x])
-				if (chip8.I == 0xFFF) && (result > 0xFFF) { // "Above 0x1000" or is it "above 0x0FFF"?
-					chip8.V[flagRegisterIndex] = 1
-				} else {
-					chip8.V[flagRegisterIndex] = 0 // Should flag be set to 0 if result was 0x0FFF or below?
+
+				if !configuration.ModeStrictCosmac {
+					if result > 0xFFF {
+						// Register I would point outside memory range
+						chip8.V[flagRegisterIndex] = 1
+					} else {
+						chip8.V[flagRegisterIndex] = 0
+					}
 				}
 				chip8.I = result & 0x0FFF
 			} else if nn == 0x0A {
