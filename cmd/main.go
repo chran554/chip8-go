@@ -24,8 +24,11 @@ func main() {
 	if !configuration.Disassemble {
 		fmt.Printf("CHIP-8 execution of \"%s\":\n", romFilepath)
 		fmt.Printf("%+v\n", configuration)
-		screen := chip8.NewScreen()
-		machine := chip8.NewChip8(screen)
+
+		screenbuffer := chip8.NewScreenBuffer()
+		peripherals := chip8.NewPeripherals()
+
+		machine := chip8.NewChip8(screenbuffer, &peripherals)
 		machine.LoadROM(romFilepath)
 		machine.Run(configuration)
 	} else {

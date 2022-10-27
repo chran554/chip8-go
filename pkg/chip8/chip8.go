@@ -31,11 +31,13 @@ type Chip8 struct {
 	Timer            uint8
 	SoundTimer       uint8
 	V                []uint8
-	Screen           Screen
 	fontStartAddress uint16
+	keys             uint16
+	Screen           ScreenBuffer
+	peripherals      *Peripherals
 }
 
-func NewChip8(screen Screen) Chip8 {
+func NewChip8(screen ScreenBuffer, peripherals *Peripherals) Chip8 {
 	chip8 := Chip8{
 		Memory:           make([]byte, 0xFFF+1), // 4kB of memory (0x000-0xFFF)
 		PC:               romAddressDefault,
@@ -45,7 +47,9 @@ func NewChip8(screen Screen) Chip8 {
 		SoundTimer:       0,
 		V:                make([]uint8, 0xF+1), // 16 registers of 8 bit each. Named V0,V1,..,V9,VA,..,VF
 		fontStartAddress: fontAddressDefault,
+		keys:             0,
 		Screen:           screen,
+		peripherals:      peripherals,
 	}
 
 	addFont(chip8)
@@ -61,7 +65,7 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 	for true {
 		// Processor stage: Fetch
 
-		time.Sleep(time.Duration(2) * time.Millisecond)
+		time.Sleep(time.Duration(3) * time.Millisecond)
 
 		// Chip8 is big endian
 		instructionCode := uint16(chip8.Memory[chip8.PC])<<8 | uint16(chip8.Memory[chip8.PC+1])
@@ -94,7 +98,8 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 			} else if nnn == 0x0E0 {
 				// 00E0: Clear screen
 				chip8.Screen.Clear()
-				go chip8.Screen.Print()
+				// go chip8.Screen.Print()
+				go chip8.UpdatePeripherals()
 			} else {
 				fmt.Println("Machine code execution not available/not implemented")
 				os.Exit(1)
@@ -246,7 +251,8 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 				}
 			}
 
-			go chip8.Screen.Print()
+			// go chip8.Screen.Print()
+			go chip8.UpdatePeripherals()
 
 		case 0xE:
 			if nn == 0x9E {
@@ -363,6 +369,18 @@ func (chip8 *Chip8) LoadROM(filepath string) {
 
 func (chip8 *Chip8) LoadETI660ROM(filepath string) {
 	chip8._loadROM(filepath, romAddressEti660)
+}
+
+func (chip8 *Chip8) UpdatePeripherals() {
+	ps := PeripheralsState{
+		sound:        chip8.SoundTimer > 0,
+		keys:         chip8.keys,
+		screenBuffer: chip8.Screen.buffer,
+		screenWidth:  chip8.Screen.Width,
+		screenHeight: chip8.Screen.Height,
+	}
+
+	chip8.peripherals.Update(ps)
 }
 
 func getPressedKey() uint8 {
