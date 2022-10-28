@@ -12,6 +12,24 @@ For more information see:
 - https://en.wikipedia.org/wiki/CHIP-8
 - https://tobiasvl.github.io/blog/write-a-chip-8-emulator/
 
+== Examples
+
+Here are some examples of running games...
+
+(It's not exciting game play but a rather short clip to show off the fantastic graphic abilities of a CHIP-8 virtual machine.)
+
+=== Pong
+
+https://vimeo.com/765107952[Pong video on Vimeo]
+
+image::documentation/images/pong_on_crt.png[Pong on CHIP-8 with CRT lookalike UI]
+
+=== Brix
+
+https://vimeo.com/765107974[Brix video on Vimeo]
+
+image::documentation/images/brix_on_crt.png[Brix on CHIP-8 with CRT lookalike UI]
+
 == Disassembler
 
 I made a disassembler to be able to find out what other programs were doing, just parsing the instructions of the ROM-files and printing actions in a more natural language.
