@@ -17,8 +17,12 @@ public class UDPDataProcessor implements UDPMulticastMessageListener.UDPPacketDa
 
             final ScreenFrame screenFrame = ScreenFrame.getOrCreateSingleton();
 
-            screenFrame.setChip8ScreenData(peripheralState.getScreen());
+            if (peripheralState.getScreen() != null) {
+                screenFrame.setChip8ScreenData(peripheralState.getScreen());
+            }
+
             screenFrame.setChip8KeyState(peripheralState.getKeys());
+            screenFrame.setChip8SoundState(peripheralState.isSound());
 
         } catch (IOException e) {
             e.printStackTrace();

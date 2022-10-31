@@ -37,9 +37,9 @@ func (s *ScreenBuffer) Value(x, y uint8) uint8 {
 }
 
 func (s *ScreenBuffer) Clear() {
-	for _, uint8s := range s.buffer {
-		for i := range uint8s {
-			uint8s[i] = 0x00
+	for y := uint8(0); y < s.Height; y++ {
+		for x := uint8(0); x < s.Width; x++ {
+			s.buffer[x][y] = 0x00
 		}
 	}
 }

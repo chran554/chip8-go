@@ -14,6 +14,7 @@ public class ScreenFrame extends JFrame {
 
     private BufferedImage image = null;
     private BufferedImage doubleBufferImage;
+    private BufferedImage bufferImageRenderSize;
 
 
     private BufferedImage crtImage = null;
@@ -25,6 +26,7 @@ public class ScreenFrame extends JFrame {
     private BufferedImage fadeImage = null;
 
     private int keyState = 0x0000;
+    private boolean soundState = false;
 
     private int width = 64;
     private int height = 32;
@@ -104,26 +106,51 @@ public class ScreenFrame extends JFrame {
 
     public void setChip8KeyState(int keyState) {
         if (keyState != this.keyState) {
-            System.out.println("New chip 8 key pad state:     " + KeyPad.leftPad(Integer.toBinaryString(keyState), "0", 16));
+            //System.out.println("New chip 8 key pad state:     " + KeyPad.leftPad(Integer.toBinaryString(keyState), "0", 16));
             this.keyState = keyState;
         }
     }
 
+    public void setChip8SoundState(boolean soundState) {
+        if (soundState != this.soundState) {
+            // System.out.println("New chip 8 sound state: " + (soundState ? "on" : "off"));
+            this.soundState = soundState;
+        }
+    }
+
     private void updateCrt() {
+        final Graphics2D bufferImageRenderSizeGraphics = (Graphics2D) bufferImageRenderSize.getGraphics();
+        final int bufferImagewidth = bufferImageRenderSize.getWidth();
+        final int bufferImageheight = bufferImageRenderSize.getHeight();
+        bufferImageRenderSize.setRGB(0,0, bufferImagewidth, bufferImageheight, new int[bufferImagewidth * bufferImageheight], 0, bufferImagewidth);
+        bufferImageRenderSizeGraphics.drawImage(bufferImage, 40, 40, 860, 640, null);
+        bufferImageRenderSizeGraphics.dispose();
+
         final Graphics phosphorImageGraphics = phosphorImage.getGraphics();
-        phosphorImageGraphics.drawImage(bufferImage, 40, 40, 860, 640, null);
+        phosphorImageGraphics.drawImage(bufferImageRenderSize, 0, 0, null);
         phosphorImageGraphics.drawImage(fadeImage, 0, 0, null);
+        phosphorImageGraphics.dispose();
+
+        //final BufferedImage phosphorGlowImage = Blur2.blur(bufferImageRenderSize, 30, true);
+        //final int[] phosphorGlowImageRGB = phosphorGlowImage.getRGB(0, 0, phosphorGlowImage.getWidth(), phosphorGlowImage.getHeight(), null, 0, phosphorGlowImage.getWidth());
+        //for (int i = 0; i < phosphorGlowImageRGB.length; i++) {
+        //    phosphorGlowImageRGB[i] = (phosphorGlowImageRGB[i] & 0x00FFFFFF) | (0x44 << 24); // Glare amount
+        //}
+        //phosphorGlowImage.setRGB(0, 0, phosphorGlowImage.getWidth(), phosphorGlowImage.getHeight(), phosphorGlowImageRGB, 0, phosphorGlowImage.getWidth());
 
         final Graphics doubleBufferImageGraphics = doubleBufferImage.getGraphics();
-        doubleBufferImageGraphics.setColor(Color.BLACK); //
+        doubleBufferImageGraphics.setColor(Color.BLACK);
         doubleBufferImageGraphics.fillRect(0, 0, doubleBufferImage.getWidth(), doubleBufferImage.getHeight());
 
         doubleBufferImageGraphics.drawImage(phosphorImage, 220 - 40, 200 - 40, null);
+        //doubleBufferImageGraphics.drawImage(phosphorGlowImage, 220 - 40, 200 - 40, null);
         doubleBufferImageGraphics.drawImage(crtImage, 0, 0, null);
         doubleBufferImageGraphics.drawImage(crtGlareImage, 0, 0, null);
+        doubleBufferImageGraphics.dispose();
 
         final Graphics2D g = (Graphics2D) getImage().getGraphics();
         g.drawImage(doubleBufferImage, 0, 0, null);
+        g.dispose();
 
         repaint();
     }
@@ -131,6 +158,7 @@ public class ScreenFrame extends JFrame {
     public void initialize(int width, int height) {
         setImage(new BufferedImage(1432, 1071, BufferedImage.TYPE_INT_ARGB));
 
+        bufferImageRenderSize = new BufferedImage(940, 720, BufferedImage.TYPE_INT_ARGB);
         doubleBufferImage = new BufferedImage(1432, 1071, BufferedImage.TYPE_INT_ARGB);
 
         try {
@@ -140,7 +168,7 @@ public class ScreenFrame extends JFrame {
             throw new RuntimeException(e);
         }
 
-        fadeImage = new BufferedImage(940, 740, BufferedImage.TYPE_INT_ARGB);
+        fadeImage = new BufferedImage(940, 720, BufferedImage.TYPE_INT_ARGB);
         final Graphics fadeGraphics = fadeImage.getGraphics();
         fadeGraphics.setColor(new Color(0x08, 0x18, 0x00, 0x40));
         fadeGraphics.fillRect(0, 0, fadeImage.getWidth() - 1, fadeImage.getHeight() - 1);
@@ -153,7 +181,7 @@ public class ScreenFrame extends JFrame {
         bufferImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         bufferImageData = new int[width * height];
 
-        phosphorImage = new BufferedImage(940, 740, BufferedImage.TYPE_INT_ARGB);
+        phosphorImage = new BufferedImage(940, 720, BufferedImage.TYPE_INT_ARGB);
         final Graphics phosphorImageGraphics = phosphorImage.getGraphics();
         phosphorImageGraphics.setColor(Color.BLACK);
         phosphorImageGraphics.fillRect(0, 0, phosphorImage.getWidth(), phosphorImage.getHeight());

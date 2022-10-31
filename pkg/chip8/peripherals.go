@@ -17,8 +17,16 @@ type Peripherals struct {
 
 type PeripheralsState struct {
 	sound  bool
-	keys   uint16
-	screen ScreenBuffer
+	keys   uint16       // keys are a 16 bit bitmask for all pressed keys, "0" through "F"
+	screen ScreenBuffer // screen is the screen memory, the pixel memory representation
+}
+
+type peripheralStateMessage struct {
+	Sound        bool   `msgpack:"sound"`
+	Keys         uint16 `msgpack:"keys"`
+	Screen       []byte `msgpack:"screen"`
+	ScreenWidth  byte   `msgpack:"screenWidth"`
+	ScreenHeight byte   `msgpack:"screenHeight"`
 }
 
 func NewPeripherals() Peripherals {
@@ -45,7 +53,7 @@ func (p *Peripherals) StartKeyPadListener() {
 }
 
 func listenForPeripheralKeyPadInput(address string, p *Peripherals) {
-	keyPadMaxDatagramSize := 256
+	keyPadMaxDatagramSize := 16
 	// Parse the string address
 	addr, err := net.ResolveUDPAddr("udp4", address)
 	if err != nil {
@@ -58,7 +66,9 @@ func listenForPeripheralKeyPadInput(address string, p *Peripherals) {
 		log.Fatal(err)
 	}
 
-	conn.SetReadBuffer(keyPadMaxDatagramSize)
+	if err = conn.SetReadBuffer(keyPadMaxDatagramSize); err != nil {
+		log.Fatalf("could not set receive buffer size: %s", err.Error())
+	}
 
 	// Loop forever reading from the socket
 	for {
@@ -88,15 +98,57 @@ func (p *Peripherals) Close() {
 	}
 }
 
+func (p *Peripherals) UpdateSound(soundState bool) {
+	oldSoundState := p.state.sound
+
+	if oldSoundState != soundState {
+		p.state.sound = soundState
+		serializedMessage := getSerializedSoundAndKeysMessage(p.state)
+
+		if _, err := p.connection.Write(serializedMessage); err != nil {
+			fmt.Printf("could not update peripherals: %s\n%+v\n", err.Error(), p.state)
+		}
+	}
+}
+
 func (p *Peripherals) UpdateScreen() {
-	serializedMessage := getSerializedMessage(p.state)
+	serializedMessage := getSerializedScreenMessage(p.state)
 
 	if _, err := p.connection.Write(serializedMessage); err != nil {
 		fmt.Printf("could not update peripherals: %s\n%+v\n", err.Error(), p.state)
 	}
 }
 
-func getSerializedMessage(state *PeripheralsState) []byte {
+func getSerializedSoundAndKeysMessage(state *PeripheralsState) []byte {
+	message := getSoundAndKeysMessage(state)
+
+	serializedMessage, err := msgpack.Marshal(&message)
+	if err != nil {
+		fmt.Printf("Could not marshal data: %+v\n", message)
+	}
+
+	return serializedMessage
+}
+
+func getSoundAndKeysMessage(state *PeripheralsState) *peripheralStateMessage {
+	width := state.screen.Width
+	height := state.screen.Height
+
+	// Create struct as soon as possible to capture sound state
+	message := peripheralStateMessage{
+		Sound:        state.sound,
+		Keys:         state.keys,
+		Screen:       nil,
+		ScreenWidth:  width,
+		ScreenHeight: height,
+	}
+
+	return &message
+}
+
+func getSerializedScreenMessage(state *PeripheralsState) []byte {
+	message := getSoundAndKeysMessage(state)
+
 	width := state.screen.Width
 	height := state.screen.Height
 	screenBitBuffer := make([]byte, int(width)*int(height)/8)
@@ -110,19 +162,7 @@ func getSerializedMessage(state *PeripheralsState) []byte {
 		}
 	}
 
-	message := struct {
-		Sound        bool   `msgpack:"sound"`
-		Keys         uint16 `msgpack:"keys"`
-		Screen       []byte `msgpack:"screen"`
-		ScreenWidth  byte   `msgpack:"screenWidth"`
-		ScreenHeight byte   `msgpack:"screenHeight"`
-	}{
-		Sound:        state.sound,
-		Keys:         state.keys,
-		Screen:       screenBitBuffer,
-		ScreenWidth:  width,
-		ScreenHeight: height,
-	}
+	message.Screen = screenBitBuffer
 
 	serializedMessage, err := msgpack.Marshal(&message)
 	if err != nil {

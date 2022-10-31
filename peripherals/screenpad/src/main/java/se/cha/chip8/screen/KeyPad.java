@@ -55,10 +55,10 @@ public class KeyPad implements KeyListener {
         buffer[0] = (byte) ((keyState & 0xFF00) >>> 8);
         buffer[1] = (byte) ((keyState & 0x00FF) >>> 0);
 
-        System.out.println("Sending key state: " +
-                leftPad(Integer.toBinaryString(buffer[0] & 0x000000FF), "0", 8) + " " +
-                leftPad(Integer.toBinaryString(buffer[1] & 0x000000FF), "0", 8) + " " +
-                leftPad(Integer.toBinaryString(keyState), "0", 16));
+        //System.out.println("Sending key state: " +
+        //        leftPad(Integer.toBinaryString(buffer[0] & 0x000000FF), "0", 8) + " " +
+        //        leftPad(Integer.toBinaryString(buffer[1] & 0x000000FF), "0", 8) + " " +
+        //        leftPad(Integer.toBinaryString(keyState), "0", 16));
 
         try {
             socket = new DatagramSocket();

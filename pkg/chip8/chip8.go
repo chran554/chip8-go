@@ -94,8 +94,7 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 			} else if nnn == 0x0E0 {
 				// 00E0: Clear screen
 				chip8.peripherals.state.screen.Clear()
-				// go chip8.Screen.Print()
-				go chip8.UpdatePeripherals()
+				go chip8.UpdateScreen()
 			} else {
 				fmt.Println("Machine code execution not available/not implemented")
 				os.Exit(1)
@@ -247,8 +246,7 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 				}
 			}
 
-			// go chip8.peripherals.state.screen.Print()
-			go chip8.UpdatePeripherals()
+			go chip8.UpdateScreen()
 
 		case 0xE:
 			if nn == 0x9E {
@@ -273,6 +271,8 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 			} else if nn == 0x18 {
 				// FX18: Sets the sound timer to the value in VX
 				chip8.SoundTimer = chip8.V[x]
+				chip8.UpdateSound(chip8.V[x] > 0)
+				fmt.Printf("Sound on (timer set to %d)\n", chip8.V[x])
 			} else if nn == 0x1E {
 				// FX1E: Add to index. The index register I will get the value in VX added to it.
 				result := chip8.I + uint16(chip8.V[x])
@@ -367,8 +367,13 @@ func (chip8 *Chip8) LoadETI660ROM(filepath string) {
 	chip8._loadROM(filepath, romAddressEti660)
 }
 
-func (chip8 *Chip8) UpdatePeripherals() {
+func (chip8 *Chip8) UpdateScreen() {
+	// go chip8.peripherals.state.screen.Print()
 	chip8.peripherals.UpdateScreen()
+}
+
+func (chip8 *Chip8) UpdateSound(soundState bool) {
+	chip8.peripherals.UpdateSound(soundState)
 }
 
 func (chip8 *Chip8) getPressedKey() uint8 {
@@ -420,5 +425,7 @@ func timerCounter(chip8 *Chip8) {
 		if chip8.SoundTimer > 0 {
 			chip8.SoundTimer--
 		}
+
+		chip8.UpdateSound(chip8.SoundTimer > 0)
 	}
 }
