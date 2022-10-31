@@ -25,10 +25,10 @@ func main() {
 		fmt.Printf("CHIP-8 execution of \"%s\":\n", romFilepath)
 		fmt.Printf("%+v\n", configuration)
 
-		screenbuffer := chip8.NewScreenBuffer()
 		peripherals := chip8.NewPeripherals()
+		peripherals.StartKeyPadListener()
 
-		machine := chip8.NewChip8(screenbuffer, &peripherals)
+		machine := chip8.NewChip8(&peripherals)
 		machine.LoadROM(romFilepath)
 		machine.Run(configuration)
 	} else {

@@ -3,22 +3,22 @@ package chip8
 import (
 	"fmt"
 	"github.com/vmihailenco/msgpack/v5"
+	"log"
 	"net"
 	"os"
 	"sync"
 )
 
 type Peripherals struct {
+	state      *PeripheralsState
 	connection net.Conn
 	lock       sync.Mutex
 }
 
 type PeripheralsState struct {
-	sound        bool
-	keys         uint16
-	screenBuffer [64][32]uint8
-	screenWidth  uint8
-	screenHeight uint8
+	sound  bool
+	keys   uint16
+	screen ScreenBuffer
 }
 
 func NewPeripherals() Peripherals {
@@ -31,7 +31,53 @@ func NewPeripherals() Peripherals {
 		os.Exit(2)
 	}
 
-	return Peripherals{connection: connection}
+	state := PeripheralsState{
+		sound:  false,              // No sound
+		keys:   0b0000000000000000, // No keys pressed
+		screen: NewScreenBuffer(),  // Empty (black) screen
+	}
+
+	return Peripherals{connection: connection, state: &state}
+}
+
+func (p *Peripherals) StartKeyPadListener() {
+	go listenForPeripheralKeyPadInput("230.0.0.0:9998", p)
+}
+
+func listenForPeripheralKeyPadInput(address string, p *Peripherals) {
+	keyPadMaxDatagramSize := 256
+	// Parse the string address
+	addr, err := net.ResolveUDPAddr("udp4", address)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Open up a connection
+	conn, err := net.ListenMulticastUDP("udp4", nil, addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	conn.SetReadBuffer(keyPadMaxDatagramSize)
+
+	// Loop forever reading from the socket
+	for {
+		buffer := make([]byte, keyPadMaxDatagramSize)
+		numBytes, _, err := conn.ReadFromUDP(buffer)
+		if err != nil {
+			log.Fatal("ReadFromUDP failed:", err)
+		}
+
+		if numBytes != 2 {
+			log.Fatalf("Illegal input length: %d (expected 2)", numBytes)
+		}
+
+		keyPadState := (uint16(buffer[0]) << 8) | (uint16(buffer[1]) << 0) // Convert byte input data to key pad state
+
+		// fmt.Printf("Got key state %016b\n", keyPadState)
+
+		p.state.keys = keyPadState
+	}
 }
 
 func (p *Peripherals) Close() {
@@ -42,37 +88,37 @@ func (p *Peripherals) Close() {
 	}
 }
 
-func (p *Peripherals) Update(ps PeripheralsState) {
-	serializedMessage := getSerializedMessage(ps)
+func (p *Peripherals) UpdateScreen() {
+	serializedMessage := getSerializedMessage(p.state)
 
 	if _, err := p.connection.Write(serializedMessage); err != nil {
-		fmt.Printf("could not update peripherals: %s\n%+v\n", err.Error(), ps)
+		fmt.Printf("could not update peripherals: %s\n%+v\n", err.Error(), p.state)
 	}
 }
 
-func getSerializedMessage(state PeripheralsState) []byte {
-	width := int(state.screenWidth)
-	height := int(state.screenHeight)
-	screenBitBuffer := make([]byte, width*height/8)
+func getSerializedMessage(state *PeripheralsState) []byte {
+	width := state.screen.Width
+	height := state.screen.Height
+	screenBitBuffer := make([]byte, int(width)*int(height)/8)
 
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			pixelIndex := y*width + x
+	for y := uint8(0); y < height; y++ {
+		for x := uint8(0); x < width; x++ {
+			pixelIndex := int(y)*int(width) + int(x)
 			byteIndex := pixelIndex / 8
 			bitIndex := 7 - pixelIndex%8
-			screenBitBuffer[byteIndex] |= (state.screenBuffer[x][y] & 0b00000001) << bitIndex
+			screenBitBuffer[byteIndex] |= (state.screen.buffer[x][y] & 0b00000001) << bitIndex
 		}
 	}
 
 	message := struct {
 		Sound        bool   `msgpack:"sound"`
-		Keys         int    `msgpack:"keys"`
+		Keys         uint16 `msgpack:"keys"`
 		Screen       []byte `msgpack:"screen"`
-		ScreenWidth  int    `msgpack:"screenWidth"`
-		ScreenHeight int    `msgpack:"screenHeight"`
+		ScreenWidth  byte   `msgpack:"screenWidth"`
+		ScreenHeight byte   `msgpack:"screenHeight"`
 	}{
 		Sound:        state.sound,
-		Keys:         int(state.keys),
+		Keys:         state.keys,
 		Screen:       screenBitBuffer,
 		ScreenWidth:  width,
 		ScreenHeight: height,

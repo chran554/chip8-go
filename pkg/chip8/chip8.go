@@ -32,12 +32,10 @@ type Chip8 struct {
 	SoundTimer       uint8
 	V                []uint8
 	fontStartAddress uint16
-	keys             uint16
-	Screen           ScreenBuffer
 	peripherals      *Peripherals
 }
 
-func NewChip8(screen ScreenBuffer, peripherals *Peripherals) Chip8 {
+func NewChip8(peripherals *Peripherals) *Chip8 {
 	chip8 := Chip8{
 		Memory:           make([]byte, 0xFFF+1), // 4kB of memory (0x000-0xFFF)
 		PC:               romAddressDefault,
@@ -47,14 +45,12 @@ func NewChip8(screen ScreenBuffer, peripherals *Peripherals) Chip8 {
 		SoundTimer:       0,
 		V:                make([]uint8, 0xF+1), // 16 registers of 8 bit each. Named V0,V1,..,V9,VA,..,VF
 		fontStartAddress: fontAddressDefault,
-		keys:             0,
-		Screen:           screen,
 		peripherals:      peripherals,
 	}
 
 	addFont(chip8)
 
-	return chip8
+	return &chip8
 }
 
 func (chip8 *Chip8) Run(configuration Configuration) {
@@ -97,7 +93,7 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 				}
 			} else if nnn == 0x0E0 {
 				// 00E0: Clear screen
-				chip8.Screen.Clear()
+				chip8.peripherals.state.screen.Clear()
 				// go chip8.Screen.Print()
 				go chip8.UpdatePeripherals()
 			} else {
@@ -231,19 +227,19 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 			chip8.V[x] = uint8(rand.Uint32()&0x000000FF) & nn
 
 		case 0xD:
-			// DXYN: Draw an N pixels tall sprite from the memory location that the I index register is holding to the screen,
+			// DXYN: Draw an N pixels tall sprite from the memory location that the I-index register is holding to the screen,
 			// at the horizontal X coordinate in VX and the Y coordinate in VY.
-			pixelX := chip8.V[x] % chip8.Screen.Width
-			pixelY := chip8.V[y] % chip8.Screen.Height
+			pixelX := chip8.V[x] % chip8.peripherals.state.screen.Width
+			pixelY := chip8.V[y] % chip8.peripherals.state.screen.Height
 			chip8.V[flagRegisterIndex] = 0
 
 			for spriteY := uint8(0); spriteY < n; spriteY++ {
 				pixelBitValues := chip8.Memory[chip8.I+uint16(spriteY)]
 				for spriteX := uint8(0); spriteX < 8; spriteX++ {
-					if (spriteX < chip8.Screen.Width) && (spriteY < chip8.Screen.Height) {
+					if (spriteX < chip8.peripherals.state.screen.Width) && (spriteY < chip8.peripherals.state.screen.Height) {
 						pixelValue := (pixelBitValues >> spriteX) & 0b00000001
 
-						resultPixelValue := chip8.Screen.XorPixel(pixelX+(7-spriteX), pixelY+spriteY, pixelValue)
+						resultPixelValue := chip8.peripherals.state.screen.XorPixel(pixelX+(7-spriteX), pixelY+spriteY, pixelValue)
 						if (pixelValue == 1) && (resultPixelValue == 0) {
 							chip8.V[flagRegisterIndex] = 1
 						}
@@ -251,18 +247,18 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 				}
 			}
 
-			// go chip8.Screen.Print()
+			// go chip8.peripherals.state.screen.Print()
 			go chip8.UpdatePeripherals()
 
 		case 0xE:
 			if nn == 0x9E {
 				// EX9E: Skip next instruction if key denoted by VX is pressed at the moment
-				if isKeyPressed(chip8.V[x]) {
+				if chip8.isKeyPressed(chip8.V[x]) {
 					chip8.PC += 2
 				}
 			} else if nn == 0xA1 {
 				// EXA1: Skip next instruction if key denoted by VX is NOT pressed at the moment
-				if !isKeyPressed(chip8.V[x]) {
+				if !chip8.isKeyPressed(chip8.V[x]) {
 					chip8.PC += 2
 				}
 			}
@@ -372,24 +368,21 @@ func (chip8 *Chip8) LoadETI660ROM(filepath string) {
 }
 
 func (chip8 *Chip8) UpdatePeripherals() {
-	ps := PeripheralsState{
-		sound:        chip8.SoundTimer > 0,
-		keys:         chip8.keys,
-		screenBuffer: chip8.Screen.buffer,
-		screenWidth:  chip8.Screen.Width,
-		screenHeight: chip8.Screen.Height,
-	}
-
-	chip8.peripherals.Update(ps)
+	chip8.peripherals.UpdateScreen()
 }
 
-func getPressedKey() uint8 {
-	// TODO implement get pressed key
+func (chip8 *Chip8) getPressedKey() uint8 {
+	for keyIndex := uint8(0); keyIndex <= 0xF; keyIndex++ {
+		if (chip8.peripherals.state.keys>>keyIndex)&0x1 == 1 {
+			return keyIndex
+		}
+	}
+
 	return 0xFF // Return key code of pressed key or 0xFF for "no key pressed"
 }
 
-func isKeyPressed(keyCode uint8) bool {
-	return keyCode == getPressedKey()
+func (chip8 *Chip8) isKeyPressed(keyCode uint8) bool {
+	return keyCode == chip8.getPressedKey()
 }
 
 func addFont(chip Chip8) {

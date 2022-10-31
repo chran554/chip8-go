@@ -24,6 +24,8 @@ public class ScreenFrame extends JFrame {
     private BufferedImage phosphorImage;
     private BufferedImage fadeImage = null;
 
+    private int keyState = 0x0000;
+
     private int width = 64;
     private int height = 32;
 
@@ -41,6 +43,7 @@ public class ScreenFrame extends JFrame {
             singleton = new ScreenFrame();
             singleton.setVisible(true);
             singleton.centerFrame();
+            singleton.addKeyListener(new KeyPad());
         }
 
         return singleton;
@@ -66,8 +69,9 @@ public class ScreenFrame extends JFrame {
 
 
     public synchronized void setChip8ScreenData(byte[] imageBitData) {
-        final int pixelOn = new Color(0x00, 0x88, 0x00, 0xFF).getRGB();
-        final int pixelOff = new Color(0x00, 0x88, 0x00, 0x00).getRGB();
+        final int pixelOn = new Color(0x33, 0x99, 0x00, 0xFF).getRGB();
+        final int pixelOff = new Color(0x33, 0x99, 0x00, 0x00).getRGB();
+
         // Convert bit array (of bytes) with one bit per pixel to array of int with one int per pixel
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
@@ -79,7 +83,30 @@ public class ScreenFrame extends JFrame {
                 bufferImageData[streamPixelIndex] = streamBitValue == 1 ? pixelOn : pixelOff;
             }
         }
+
+        // printScreen(bufferImageData);
         bufferImage.setRGB(0, 0, width, height, bufferImageData, 0, width);
+    }
+
+    private void printScreen(int[] screenBuffer) {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("\n");
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                final int pixelValue = screenBuffer[x + y * width];
+                sb.append((pixelValue != 0) ? "██" : "░░");
+            }
+            sb.append("\n");
+        }
+
+        System.out.println(sb);
+    }
+
+    public void setChip8KeyState(int keyState) {
+        if (keyState != this.keyState) {
+            System.out.println("New chip 8 key pad state:     " + KeyPad.leftPad(Integer.toBinaryString(keyState), "0", 16));
+            this.keyState = keyState;
+        }
     }
 
     private void updateCrt() {
@@ -115,9 +142,9 @@ public class ScreenFrame extends JFrame {
 
         fadeImage = new BufferedImage(940, 740, BufferedImage.TYPE_INT_ARGB);
         final Graphics fadeGraphics = fadeImage.getGraphics();
-        fadeGraphics.setColor(new Color(0x00, 0x00, 0x00, 0x40));
+        fadeGraphics.setColor(new Color(0x08, 0x18, 0x00, 0x40));
         fadeGraphics.fillRect(0, 0, fadeImage.getWidth() - 1, fadeImage.getHeight() - 1);
-        fadeGraphics.setColor(new Color(0x00, 0x00, 0x00, 0x80));
+        fadeGraphics.setColor(new Color(0x08, 0x18, 0x00, 0x80));
         for (int crtY = 0; crtY < fadeImage.getHeight(); crtY += 3) {
             fadeGraphics.drawLine(0, crtY, fadeImage.getWidth(), crtY);
         }

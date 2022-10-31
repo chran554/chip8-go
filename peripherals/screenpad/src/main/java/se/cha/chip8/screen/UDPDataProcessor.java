@@ -13,11 +13,12 @@ public class UDPDataProcessor implements UDPMulticastMessageListener.UDPPacketDa
             //System.out.println(new String(receivedPacket.getData(), 0, receivedPacket.getLength(), StandardCharsets.UTF_8));
 
             final ObjectMapper objectMapper = new ObjectMapper(new MessagePackFactory());
-            final PeripheralState pixelData = objectMapper.readValue(data, PeripheralState.class);
+            final PeripheralState peripheralState = objectMapper.readValue(data, PeripheralState.class);
 
             final ScreenFrame screenFrame = ScreenFrame.getOrCreateSingleton();
 
-            screenFrame.setChip8ScreenData(pixelData.screen);
+            screenFrame.setChip8ScreenData(peripheralState.getScreen());
+            screenFrame.setChip8KeyState(peripheralState.getKeys());
 
         } catch (IOException e) {
             e.printStackTrace();
