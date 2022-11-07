@@ -115,6 +115,12 @@ public class ScreenFrame extends JFrame {
         if (soundState != this.soundState) {
             // System.out.println("New chip 8 sound state: " + (soundState ? "on" : "off"));
             this.soundState = soundState;
+
+            if (this.soundState) {
+                BeepGenerator.playBeep();
+            } else {
+                BeepGenerator.pauseBeep();
+            }
         }
     }
 
@@ -122,7 +128,7 @@ public class ScreenFrame extends JFrame {
         final Graphics2D bufferImageRenderSizeGraphics = (Graphics2D) bufferImageRenderSize.getGraphics();
         final int bufferImagewidth = bufferImageRenderSize.getWidth();
         final int bufferImageheight = bufferImageRenderSize.getHeight();
-        bufferImageRenderSize.setRGB(0,0, bufferImagewidth, bufferImageheight, new int[bufferImagewidth * bufferImageheight], 0, bufferImagewidth);
+        bufferImageRenderSize.setRGB(0, 0, bufferImagewidth, bufferImageheight, new int[bufferImagewidth * bufferImageheight], 0, bufferImagewidth);
         bufferImageRenderSizeGraphics.drawImage(bufferImage, 40, 40, 860, 640, null);
         bufferImageRenderSizeGraphics.dispose();
 

@@ -2,6 +2,7 @@ package chip8
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"time"
@@ -104,6 +105,11 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 			// 1NNN: Jump to address NNN
 			if configuration.EndOnInfiniteLoop && ((chip8.PC - 2) == nnn) {
 				fmt.Println("Terminated emulator and program on detected infinite loop")
+
+				chip8.peripherals.state.sound = false
+				chip8.peripherals.state.keys = 0b0000000000000000
+				chip8.UpdateSoundAndKeys()
+
 				os.Exit(0)
 			}
 
@@ -270,9 +276,9 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 				chip8.Timer = chip8.V[x]
 			} else if nn == 0x18 {
 				// FX18: Sets the sound timer to the value in VX
-				chip8.SoundTimer = chip8.V[x]
 				chip8.UpdateSound(chip8.V[x] > 0)
-				fmt.Printf("Sound on (timer set to %d)\n", chip8.V[x])
+				chip8.SoundTimer = remappedSoundValue(chip8.V[x])
+				//fmt.Printf("Sound on (value %d, sound timer set to %d, %d msec)\n", chip8.V[x], chip8.SoundTimer, int(math.Round(float64(chip8.SoundTimer)*1000.0/60.0)))
 			} else if nn == 0x1E {
 				// FX1E: Add to index. The index register I will get the value in VX added to it.
 				result := chip8.I + uint16(chip8.V[x])
@@ -288,17 +294,12 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 				chip8.I = result & 0x0FFF
 			} else if nn == 0x0A {
 				// FX0A: This instruction "blocks", it stops executing instructions and wait for key input. Value of key is stored in VX.
-				for {
-					time.Sleep(time.Duration(10) * time.Second)
+				pressedKeyCode := chip8.getPressedKey()
+				if pressedKeyCode != 0xFF {
+					chip8.V[x] = pressedKeyCode
+				} else {
+					chip8.PC -= 2 // Do not advance in program, do this instruction over again (loop)
 				}
-				/*
-					pressedKeyCode := getPressedKey()
-					if pressedKeyCode != 0xFF {
-						chip8.V[x] = pressedKeyCode
-					} else {
-						chip8.PC -= 2 // Do not advance in program, do this instruction over again (loop)
-					}
-				*/
 			} else if nn == 0x29 {
 				// FX29: Set index register to point at font character address. The character code is stored in VX
 				// Each character is 5 bytes in height
@@ -347,6 +348,16 @@ func (chip8 *Chip8) Run(configuration Configuration) {
 	}
 }
 
+func remappedSoundValue(soundDelay uint8) uint8 {
+	if soundDelay == 0 {
+		return 0
+	}
+
+	minimalDelay := 5.0
+	v := math.Pow(float64(soundDelay-1), 0.85) / math.Pow(254, 0.85)
+	return uint8(math.Round(v*(255.0-minimalDelay) + minimalDelay))
+}
+
 func (chip8 *Chip8) _loadROM(filepath string, startAddress int) {
 	romBytes, err := os.ReadFile(filepath)
 	if err != nil {
@@ -376,6 +387,10 @@ func (chip8 *Chip8) UpdateSound(soundState bool) {
 	chip8.peripherals.UpdateSound(soundState)
 }
 
+func (chip8 *Chip8) UpdateSoundAndKeys() {
+	chip8.peripherals.UpdateSoundAndKeys()
+}
+
 func (chip8 *Chip8) getPressedKey() uint8 {
 	for keyIndex := uint8(0); keyIndex <= 0xF; keyIndex++ {
 		if (chip8.peripherals.state.keys>>keyIndex)&0x1 == 1 {
@@ -387,7 +402,8 @@ func (chip8 *Chip8) getPressedKey() uint8 {
 }
 
 func (chip8 *Chip8) isKeyPressed(keyCode uint8) bool {
-	return keyCode == chip8.getPressedKey()
+	// fmt.Printf("Checking for key: %1X    %016b\n", keyCode, chip8.peripherals.state.keys)
+	return (chip8.peripherals.state.keys>>keyCode)&0x1 == 1
 }
 
 func addFont(chip Chip8) {

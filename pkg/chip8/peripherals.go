@@ -53,7 +53,7 @@ func (p *Peripherals) StartKeyPadListener() {
 }
 
 func listenForPeripheralKeyPadInput(address string, p *Peripherals) {
-	keyPadMaxDatagramSize := 16
+	keyPadMaxDatagramSize := 256
 	// Parse the string address
 	addr, err := net.ResolveUDPAddr("udp4", address)
 	if err != nil {
@@ -65,14 +65,16 @@ func listenForPeripheralKeyPadInput(address string, p *Peripherals) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer conn.Close()
 
 	if err = conn.SetReadBuffer(keyPadMaxDatagramSize); err != nil {
 		log.Fatalf("could not set receive buffer size: %s", err.Error())
 	}
 
+	buffer := make([]byte, keyPadMaxDatagramSize)
+
 	// Loop forever reading from the socket
 	for {
-		buffer := make([]byte, keyPadMaxDatagramSize)
 		numBytes, _, err := conn.ReadFromUDP(buffer)
 		if err != nil {
 			log.Fatal("ReadFromUDP failed:", err)
@@ -83,9 +85,7 @@ func listenForPeripheralKeyPadInput(address string, p *Peripherals) {
 		}
 
 		keyPadState := (uint16(buffer[0]) << 8) | (uint16(buffer[1]) << 0) // Convert byte input data to key pad state
-
-		// fmt.Printf("Got key state %016b\n", keyPadState)
-
+		//fmt.Printf("Got key state: %016b\n", keyPadState)
 		p.state.keys = keyPadState
 	}
 }
@@ -98,16 +98,21 @@ func (p *Peripherals) Close() {
 	}
 }
 
-func (p *Peripherals) UpdateSound(soundState bool) {
-	oldSoundState := p.state.sound
-
-	if oldSoundState != soundState {
-		p.state.sound = soundState
+func (p *Peripherals) UpdateSound(newSoundState bool) {
+	if p.state.sound != newSoundState {
+		p.state.sound = newSoundState
 		serializedMessage := getSerializedSoundAndKeysMessage(p.state)
 
 		if _, err := p.connection.Write(serializedMessage); err != nil {
 			fmt.Printf("could not update peripherals: %s\n%+v\n", err.Error(), p.state)
 		}
+	}
+}
+
+func (p *Peripherals) UpdateSoundAndKeys() {
+	serializedMessage := getSerializedSoundAndKeysMessage(p.state)
+	if _, err := p.connection.Write(serializedMessage); err != nil {
+		fmt.Printf("could not update peripherals: %s\n%+v\n", err.Error(), p.state)
 	}
 }
 

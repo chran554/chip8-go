@@ -33,6 +33,7 @@ func main() {
 		machine.Run(configuration)
 	} else {
 		fmt.Printf("CHIP-8 disassembly of \"%s\":\n", romFilepath)
+		fmt.Printf("%+v\n", configuration)
 		chip8.DisassembleProgram(romFilepath, 0x200, configuration)
 	}
 }

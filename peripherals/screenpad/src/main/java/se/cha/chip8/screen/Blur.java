@@ -1,5 +1,8 @@
 package se.cha.chip8.screen;
 
+/**
+ * https://blog.ivank.net/fastest-gaussian-blur.html
+ */
 public class Blur {
 /*
     public static void gaussBlur_4(scl, tcl, int w, int h, double r) {

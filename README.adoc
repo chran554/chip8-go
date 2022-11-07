@@ -7,6 +7,13 @@ Nothing remarkable but a fun amusement during a weekend.
 
 Although the Chip-8 "machine" or processor is very limited it can produce a lot of fun, 70's like, applications and games.
 
+CHIP-8 is an interpreted programming language, developed by Joseph
+Weisbecker. It was initially used on the COSMAC VIP and Telmac 1800 8-bit
+microcomputers in the mid-1970s. CHIP-8 programs are run on a CHIP-8 virtual
+machine. It was made to allow video games to be more easily programmed for
+said computers.
+
+
 For more information see:
 
 - https://en.wikipedia.org/wiki/CHIP-8
@@ -32,7 +39,7 @@ image::documentation/images/brix_on_crt.png[Brix on CHIP-8 with CRT lookalike UI
 
 == Disassembler
 
-I made a disassembler to be able to find out what other programs were doing, just parsing the instructions of the ROM-files and printing actions in a more natural language.
+I made a "disassembler" to be able to find out what other programs were doing, just parsing the instructions of the ROM-files and printing actions in a more natural language.
 
 (Well, the "ROM" is not really read-only as the program can self rewrite/mutate in memory during execution).
 
