@@ -18,7 +18,7 @@ type Peripherals struct {
 type PeripheralsState struct {
 	sound  bool
 	keys   uint16       // keys are a 16 bit bitmask for all pressed keys, "0" through "F"
-	screen ScreenBuffer // screen is the screen memory, the pixel memory representation
+	screen ScreenBuffer // ScreenBuffer is the screen memory, the pixel memory representation
 }
 
 type peripheralStateMessage struct {
@@ -31,7 +31,8 @@ type peripheralStateMessage struct {
 
 func NewPeripherals() Peripherals {
 	// In IPv4, any address between 224.0.0.0 to 239.255.255.255 can be used as a multicast address.
-	address := "230.0.0.0:9999"
+	// address := "230.0.0.0:9999"
+	address := "224.0.0.8:9999"
 
 	connection, err := net.Dial("udp", address)
 	if err != nil {
