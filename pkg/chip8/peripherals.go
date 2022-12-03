@@ -10,9 +10,10 @@ import (
 )
 
 type Peripherals struct {
-	state      *PeripheralsState
-	connection net.Conn
-	lock       sync.Mutex
+	state                *PeripheralsState
+	screenConnection     net.Conn
+	lock                 sync.Mutex
+	keyStateListenerPort int
 }
 
 type PeripheralsState struct {
@@ -29,14 +30,10 @@ type peripheralStateMessage struct {
 	ScreenHeight byte   `msgpack:"screenHeight"`
 }
 
-func NewPeripherals() Peripherals {
-	// In IPv4, any address between 224.0.0.0 to 239.255.255.255 can be used as a multicast address.
-	// address := "230.0.0.0:9999"
-	address := "224.0.0.8:9999"
-
-	connection, err := net.Dial("udp", address)
+func NewPeripherals(screenAddress string, keyStateListenerPort int) Peripherals {
+	screenConnection, err := net.Dial("udp", screenAddress)
 	if err != nil {
-		fmt.Printf("Could not create multicast connection to render monitor %v", err)
+		fmt.Printf("Could not create screenConnection to screen %v", err)
 		os.Exit(2)
 	}
 
@@ -46,47 +43,39 @@ func NewPeripherals() Peripherals {
 		screen: NewScreenBuffer(),  // Empty (black) screen
 	}
 
-	return Peripherals{connection: connection, state: &state}
+	return Peripherals{
+		screenConnection:     screenConnection,
+		keyStateListenerPort: keyStateListenerPort,
+		state:                &state,
+	}
 }
 
 func (p *Peripherals) StartKeyPadListener() {
-	go listenForPeripheralKeyPadInput("230.0.0.0:9998", p)
+	go listenForPeripheralKeyPadInput(p)
 }
 
-func listenForPeripheralKeyPadInput(address string, p *Peripherals) {
+func listenForPeripheralKeyPadInput(p *Peripherals) {
 	keyPadMaxDatagramSize := 256
-	// Parse the string address
-	addr, err := net.ResolveUDPAddr("udp4", address)
-	if err != nil {
-		log.Fatal(err)
-	}
 
-	// Open up a connection
-	conn, err := net.ListenMulticastUDP("udp4", nil, addr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer conn.Close()
-
-	if err = conn.SetReadBuffer(keyPadMaxDatagramSize); err != nil {
-		log.Fatalf("could not set receive buffer size: %s", err.Error())
-	}
+	addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", p.keyStateListenerPort))
+	sock, _ := net.ListenUDP("udp", addr)
+	sock.SetReadBuffer(keyPadMaxDatagramSize)
 
 	buffer := make([]byte, keyPadMaxDatagramSize)
 
 	// Loop forever reading from the socket
 	for {
-		numBytes, _, err := conn.ReadFromUDP(buffer)
+		numBytes, _, err := sock.ReadFromUDP(buffer)
 		if err != nil {
-			log.Fatal("ReadFromUDP failed:", err)
+			log.Fatal("Read from UDP failed:", err)
 		}
 
 		if numBytes != 2 {
-			log.Fatalf("Illegal input length: %d (expected 2)", numBytes)
+			log.Fatalf("chip-8 key state listener: illegal input length: %d bytes (expected 2 bytes)", numBytes)
 		}
 
 		keyPadState := (uint16(buffer[0]) << 8) | (uint16(buffer[1]) << 0) // Convert byte input data to key pad state
-		//fmt.Printf("Got key state: %016b\n", keyPadState)
+		// fmt.Printf("Got key state: %016b\n", keyPadState)
 		p.state.keys = keyPadState
 	}
 }
@@ -94,8 +83,8 @@ func listenForPeripheralKeyPadInput(address string, p *Peripherals) {
 func (p *Peripherals) Close() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	if err := p.connection.Close(); err != nil {
-		fmt.Printf("could close connection: %s\n", err.Error())
+	if err := p.screenConnection.Close(); err != nil {
+		fmt.Printf("could close screenConnection: %s\n", err.Error())
 	}
 }
 
@@ -104,24 +93,27 @@ func (p *Peripherals) UpdateSound(newSoundState bool) {
 		p.state.sound = newSoundState
 		serializedMessage := getSerializedSoundAndKeysMessage(p.state)
 
-		if _, err := p.connection.Write(serializedMessage); err != nil {
-			fmt.Printf("could not update peripherals: %s\n%+v\n", err.Error(), p.state)
+		if _, err := p.screenConnection.Write(serializedMessage); err != nil {
+			fmt.Printf("could not update peripherals sound (plus key) state: %s\n", err.Error())
+			fmt.Println("(is screen application up and running?)")
 		}
 	}
 }
 
 func (p *Peripherals) UpdateSoundAndKeys() {
 	serializedMessage := getSerializedSoundAndKeysMessage(p.state)
-	if _, err := p.connection.Write(serializedMessage); err != nil {
-		fmt.Printf("could not update peripherals: %s\n%+v\n", err.Error(), p.state)
+	if _, err := p.screenConnection.Write(serializedMessage); err != nil {
+		fmt.Printf("could not update peripherals sound and key state: %s\n", err.Error())
+		fmt.Println("(is screen application up and running?)")
 	}
 }
 
 func (p *Peripherals) UpdateScreen() {
 	serializedMessage := getSerializedScreenMessage(p.state)
 
-	if _, err := p.connection.Write(serializedMessage); err != nil {
-		fmt.Printf("could not update peripherals: %s\n%+v\n", err.Error(), p.state)
+	if _, err := p.screenConnection.Write(serializedMessage); err != nil {
+		fmt.Printf("could not update peripherals screen (plus sound and key) state: %s\n", err.Error())
+		fmt.Println("(is screen application up and running?)")
 	}
 }
 
