@@ -392,13 +392,17 @@ func (chip8 *Chip8) UpdateSoundAndKeys() {
 }
 
 func (chip8 *Chip8) getPressedKey() uint8 {
-	for keyIndex := uint8(0); keyIndex <= 0xF; keyIndex++ {
-		if (chip8.peripherals.state.keys>>keyIndex)&0x1 == 1 {
-			return keyIndex
+	keySate := chip8.peripherals.state.keys
+
+	if keySate > 0 {
+		for keyIndex := uint8(0); keyIndex <= 0xF; keyIndex++ {
+			if (keySate>>keyIndex)&0x1 == 1 {
+				return keyIndex
+			}
 		}
 	}
 
-	return 0xFF // Return key code of pressed key or 0xFF for "no key pressed"
+	return 0xFF // return key code of pressed key or 0xFF for "no key pressed"
 }
 
 func (chip8 *Chip8) isKeyPressed(keyCode uint8) bool {

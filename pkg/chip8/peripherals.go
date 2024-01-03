@@ -75,8 +75,7 @@ func listenForPeripheralKeyPadInput(p *Peripherals) {
 		}
 
 		keyPadState := (uint16(buffer[0]) << 8) | (uint16(buffer[1]) << 0) // Convert byte input data to key pad state
-		// fmt.Printf("Got key state: %016b\n", keyPadState)
-		p.state.keys = keyPadState
+		p.UpdateKeys(keyPadState)
 	}
 }
 
@@ -91,12 +90,15 @@ func (p *Peripherals) Close() {
 func (p *Peripherals) UpdateSound(newSoundState bool) {
 	if p.state.sound != newSoundState {
 		p.state.sound = newSoundState
-		serializedMessage := getSerializedSoundAndKeysMessage(p.state)
+		p.UpdateSoundAndKeys()
+	}
+}
 
-		if _, err := p.screenConnection.Write(serializedMessage); err != nil {
-			fmt.Printf("could not update peripherals sound (plus key) state: %s\n", err.Error())
-			fmt.Println("(is screen application up and running?)")
-		}
+func (p *Peripherals) UpdateKeys(newKeysState uint16) {
+	if p.state.keys != newKeysState {
+		//fmt.Printf("New key state: %016b\n", newKeysState)
+		p.state.keys = newKeysState
+		p.UpdateSoundAndKeys()
 	}
 }
 
